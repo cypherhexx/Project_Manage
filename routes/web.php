@@ -72,6 +72,11 @@ Route::get('/invoice/view/{invoice?}/{url_slug}', 'InvoiceController@customer_vi
 Route::get('/invoices/download/{invoice?}', 'InvoiceController@download_invoice')->name('download_invoice');
 Route::get('/invoices/make/payment/', 'InvoiceController@process_payment_request')->name('process_payment_request');
 
+//paypal integration
+
+Route::get('/process/paypal/success/{id}', 'InvoiceController@process_paypal_success')->name('process_paypal_success');
+//paypal integration
+
 Route::get('/process/payment', 'InvoiceController@process_payment_request')->name('process_payment_request');
 
 Route::get('/estimate/view/{estimate}/{url_slug}', 'EstimateController@customer_view')->name('estimate_customer_view');
@@ -81,6 +86,9 @@ Route::post('/estimate/decline/{estimate}', 'EstimateController@decline_estimate
 Route::get('/credit-note/download/{credit_note}', 'CreditNoteController@download_credit_note')->name('download_credit_note');
 
 Route::post('/invoices/payment/process/stripe', 'InvoiceController@process_stripe_payment')->name('process_stripe_payment');
+
+Route::post('/invoices/payment/process/paypal', 'InvoiceController@process_paypal_payment')->name('process_paypal_payment');
+
 
 // -------------------------------- Publicly Accessible Routes ------------------------------------------
 

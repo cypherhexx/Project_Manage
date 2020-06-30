@@ -35,6 +35,40 @@ use Illuminate\Contracts\Encryption\DecryptException;
 use App\Notifications\PaymentReceived;
 use App\Task;
 
+use PayPal\Rest\ApiContext;
+use PayPal\Auth\OAuthTokenCredential;
+use PayPal\Api\Amount;
+use PayPal\Api\Payout;
+use PayPal\Api\PayoutSenderBatchHeader;
+use PayPal\Api\PayoutItem;
+use PayPal\Api\Details;
+use PayPal\Api\Item;
+use PayPal\Api\ItemList;
+use PayPal\Api\Payer;
+use PayPal\Api\Payment as Payment1;
+use PayPal\Api\RedirectUrls;
+use PayPal\Api\ExecutePayment;
+use PayPal\Api\PaymentExecution;
+use PayPal\Api\Transaction;
+
+use PayPal\Api\ChargeModel;
+use PayPal\Api\Currency as Currency1;   
+use PayPal\Api\MerchantPreferences;
+use PayPal\Api\PaymentDefinition;
+use PayPal\Api\Plan;
+use PayPal\Api\Patch;
+use PayPal\Api\PatchRequest;
+use PayPal\Common\PayPalModel;
+
+// use to process billing agreements
+use PayPal\Api\Agreement;
+use PayPal\Api\AgreementStateDescriptor;
+use PayPal\Api\ShippingAddress;
+
+use Srmklive\PayPal\Services\ExpressCheckout;
+
+
+
 class InvoiceController extends Controller
 {
     /**
@@ -42,6 +76,32 @@ class InvoiceController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
+
+    protected static  $provider;
+    private $apiContext;
+    private $mode;
+    private $client_id;
+    private $secret;
+
+    
+    public function __construct()
+    {
+       
+       self::$provider = new ExpressCheckout;  
+        if(config('paypal.settings.mode') == 'live'){
+            $this->client_id = config('paypal.live_client_id');
+            $this->secret = config('paypal.live_secret');
+        } else {
+            $this->client_id = config('paypal.sandbox_client_id');
+            $this->secret = config('paypal.sandbox_secret');
+        }
+        
+        // Set the Paypal API Context/Credentials
+        $this->apiContext = new ApiContext(new OAuthTokenCredential($this->client_id, $this->secret));
+        $this->apiContext->setConfig(config('paypal.settings'));
+    }
+
+
     public function index(Request $request)
     {
 
@@ -1550,8 +1610,126 @@ class InvoiceController extends Controller
 
     }
 
+    function process_paypal_payment(Request $request)
+    {   
+        error_log("number");
+       
+        error_log(json_encode($request));
+        error_log("end");
+        $invoice_id     = decrypt($request->invoice_id);
+        $invoice        = Invoice::find($invoice_id);
+        error_log("currency");
+        error_log(json_encode($invoice->currency->code));
+        $currency = $invoice->currency->code;
+        $data = [];
+        $amount = $invoice->validate_payment_amount(Input::get('stripeAmount'));
+        
+        $data['items'] = [
+            [
+                'name' => Config('APP_NAME'),
+                'price' => $amount,
+                'qty' => 1
+            ]
+        ];
+
+        $data['invoice_id'] = time();
+
+        $data['invoice_description'] = "Order #{$data['invoice_id']} Invoice";
+        $data['return_url'] = url('/process/paypal/success',$invoice_id);
+        $data['cancel_url'] = url('register');
+        Session::put('invoice_id',$invoice_id);
+        Session::put('amount',$amount);
+        
+
+        $data['total'] = $amount; 
+        error_log("date check");
+        error_log($data['total']);
+
+        self::$provider->setCurrency($currency);
+        $response = self::$provider->setExpressCheckout($data); 
+        return redirect($response['paypal_link']);
+    }
+
+    function process_paypal_success(Request $request, $id)
+    {   
+        error_log("check visit");
+
+        
+        $invoice_id = Session::get('invoice_id');
+        $invoice        = Invoice::find($invoice_id);
+        error_log(json_encode($invoice_id));
+
+        self::$provider->setCurrency($invoice->currency->code);
+        $response = self::$provider->getExpressCheckoutDetails($request->token);
+        error_log(json_encode($response));
+        if($response['ACK'] == 'Success'){
+
+            /*added vincy*/
+            $data = [];
+            $data['items'] = [
+                        [
+                            'name' => Config('APP_NAME'),
+                            'price' => Session::get('amount'),
+                            'qty' => 1
+                        ]
+                    ];
+
+            $data['invoice_id'] = $invoice_id;
+            $data['invoice_description'] = "Order #{$invoice_id} Invoice";
+            $data['return_url'] = url('/process/paypal/success',$id);
+            $data['cancel_url'] = url('register');
+
+            $data['total'] = Session::get('amount');
+
+            $response = self::$provider->doExpressCheckoutPayment($data, $request->token, $request->PayerID);
+            /**/
+
+    
+            if($response['ACK'] == 'Success'){
+                if($invoice)
+                {      
+
+                    $amount = $invoice->validate_payment_amount(Input::get('stripeAmount'));
+                    error_log($amount);
+                    $amount = Session::get('amount');
+                    if(!$amount)
+                    {
+                        // Redirect Back
+                        Session::flash('message', __('form.under_received_amount'));
+                        Session::flash('alert-class', 'alert-danger');                
+                    }
+                    else
+                    {
+                        // $stripe = new \App\Services\PaymentGateway\PayPal();
+
+                        // if($stripe->charge($invoice, $request))
+                        // {
+
+                            Session::flash('message', __('form.payment_successfully_processed'));
+                            Session::flash('alert-class', 'alert-success');                
+                        // }
+                        // else
+                        // {
+                        //     Session::flash('message', __('form.could_not_process_the_payment'));
+                        //     Session::flash('alert-class', 'alert-danger'); 
+                            
+                        // }
+                    }            
+
+                    
+                }
+            } 
+            return redirect()->route('invoice_customer_view', [$invoice->id, $invoice->url_slug]);  
+        }   else {
+            return redirect('login');
+        }   
+        
+        
+    }
+
     function process_stripe_payment(Request $request)
     {
+        error_log("check paypal");
         ini_set('max_execution_time', 300); //300 seconds = 5 minutes
         set_time_limit(0);
         /* 
