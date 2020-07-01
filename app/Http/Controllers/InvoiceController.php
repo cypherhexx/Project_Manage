@@ -1700,28 +1700,33 @@ class InvoiceController extends Controller
                     }
                     else
                     {
-                        // $stripe = new \App\Services\PaymentGateway\PayPal();
+                        $stripe = new \App\Services\PaymentGateway\PayPal();
 
-                        // if($stripe->charge($invoice, $request))
-                        // {
+                        if($stripe->charge($invoice, $request,$amount))
+                        {
 
                             Session::flash('message', __('form.payment_successfully_processed'));
                             Session::flash('alert-class', 'alert-success');                
-                        // }
-                        // else
-                        // {
-                        //     Session::flash('message', __('form.could_not_process_the_payment'));
-                        //     Session::flash('alert-class', 'alert-danger'); 
+                        }
+                        else
+                        {
                             
-                        // }
+                            
+                        }
                     }            
 
                     
                 }
-            } 
+            } else {
+                Session::flash('message', __('form.could_not_process_the_payment'));
+                Session::flash('alert-class', 'alert-danger'); 
+                error_log("start exception");
+            }
             return redirect()->route('invoice_customer_view', [$invoice->id, $invoice->url_slug]);  
         }   else {
-            return redirect('login');
+            Session::flash('message', __('form.could_not_process_the_payment'));
+            Session::flash('alert-class', 'alert-danger'); 
+            return redirect()->route('invoice_customer_view', [$invoice->id, $invoice->url_slug]);  
         }   
         
         

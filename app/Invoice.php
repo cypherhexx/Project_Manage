@@ -353,7 +353,7 @@ class Invoice extends Model
     // update_invoice_and_insert_in_payment_table
     public function payment_received(PaymentBean $paymentBean)        
     {     
-
+        error_log("check payment received");
         $invoice                    = $this;
         $amount                     = $paymentBean->getAmount();
 
