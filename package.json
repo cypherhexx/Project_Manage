@@ -24,7 +24,7 @@
     "bootstrap": "^4.2.1",
     "bootstrap-colorpicker": "^3.0.3",
     "bootstrap-daterangepicker": "^3.0.3",
-    "chart.js": "^2.7.2",
+    "chart.js": "^2.9.4",
     "four-boot": "^2.0.0",
     "hammerjs": "^2.0.8",
     "jgrowl": "^1.4.6",
